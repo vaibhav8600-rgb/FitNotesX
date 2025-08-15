@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* FitNotes Design System - All colors MUST be HSL */
+
+@layer base {
+  :root {
+    /* FitNotes Brand Colors */
+    --fitnotes-teal: 174 64% 55%;
+    --fitnotes-teal-dark: 174 64% 45%;
+    --fitnotes-teal-light: 174 64% 65%;
+    
+    /* Dark Theme Base */
+    --background: 220 13% 8%;
+    --foreground: 210 40% 98%;
+    
+    --surface: 220 13% 12%;
+    --surface-secondary: 220 13% 16%;
+    --surface-tertiary: 220 13% 20%;
+    
+    --card: 220 13% 12%;
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 220 13% 12%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 174 64% 55%;
+    --primary-foreground: 220 13% 8%;
+    
+    --secondary: 220 13% 16%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 220 13% 16%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    --accent: 174 64% 55%;
+    --accent-foreground: 220 13% 8%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 220 13% 20%;
+    --input: 220 13% 16%;
+    --ring: 174 64% 55%;
+    
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
+    --info: 199 89% 48%;
+    
+    /* Chart Colors */
+    --chart-primary: 174 64% 55%;
+    --chart-secondary: 199 89% 48%;
+    --chart-tertiary: 142 76% 36%;
+    --chart-quaternary: 38 92% 50%;
+    --chart-grid: 220 13% 25%;
+    --chart-text: 215 20.2% 65.1%;
+    
+    --radius: 0.5rem;
+  }
+  
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    
+    --surface: 0 0% 98%;
+    --surface-secondary: 0 0% 96%;
+    --surface-tertiary: 0 0% 94%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    
+    --primary: 174 64% 45%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    --accent: 174 64% 45%;
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 174 64% 45%;
+    
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
+    --info: 199 89% 48%;
+    
+    --chart-primary: 174 64% 45%;
+    --chart-secondary: 199 89% 48%;
+    --chart-tertiary: 142 76% 36%;
+    --chart-quaternary: 38 92% 50%;
+    --chart-grid: 214.3 31.8% 91.4%;
+    --chart-text: 215.4 16.3% 46.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
