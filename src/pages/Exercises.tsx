@@ -49,9 +49,14 @@ export default function Exercises() {
     setSearchQuery,
     getFilteredExercises,
     getCategories,
-    addExercise
+    addExercise,
+    loadExercises
   } = useExercisesStore();
   
+  useEffect(() => {
+  loadExercises();
+}, [loadExercises]);
+
   const { 
     currentWorkout, 
     currentDate, 
