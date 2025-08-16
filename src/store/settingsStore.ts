@@ -6,7 +6,7 @@ import { db } from '@/db/dexie';
 // Only import stores you actually have:
 import { useWorkoutsStore } from '@/store/workoutsStore';
 import { useExercisesStore } from '@/store/exercisesStore';
-
+import { markSeededGuard } from '@/app/bootstrap'; // NEW
 export interface SettingsState {
   theme: 'light' | 'dark' | 'auto';
   units: 'metric' | 'imperial';
@@ -23,24 +23,47 @@ export interface SettingsState {
   resetData: () => Promise<void>;
 }
 
-// Export defaults so other modules can reuse.
-export const INITIAL_SETTINGS: Pick<
-  SettingsState,
-  'theme' | 'units' | 'weightIncrement' | 'timerSound' | 'seedingDone'
-> = {
+// UPDATED: keep initial in-memory defaults well-typed (literal unions preserved)
+export const INITIAL_SETTINGS = {
   theme: 'dark',
   units: 'metric',
   weightIncrement: 2.5,
   timerSound: true,
-  seedingDone: false,
-};
+  seedingDone: true, // align with dexie.ts ready hook & reset behavior
+} as const satisfies Pick<
+  SettingsState,
+  'theme' | 'units' | 'weightIncrement' | 'timerSound' | 'seedingDone'
+>;
+
+// UPDATED: what we (re)write into Dexie when creating the row
+const DB_DEFAULT_SETTINGS = {
+  id: 1,
+  theme: 'dark',
+  units: 'metric',
+  weightIncrement: 2.5,
+  timerSound: true,
+  seedingDone: true,
+} as const;
+
+// UPDATED: what we set into Zustand after a reset
+const RESET_DEFAULTS = {
+  theme: 'dark',
+  units: 'metric',
+  weightIncrement: 2.5,
+  timerSound: true,
+  seedingDone: true,
+} as const satisfies Pick<
+  SettingsState,
+  'theme' | 'units' | 'weightIncrement' | 'timerSound' | 'seedingDone'
+>;
+
 
 // Persist keys used by your stores (adjust to match your actual persist names).
 const PERSIST_KEYS = [
   'fitnotes-settings',   // this store
   'fitnotes-workouts',   // workouts store (change if different)
   'fitnotes-exercises',  // exercises store (change if different)
-];
+] as const;
 
 // Ensure there is a row with id=1 to avoid update errors.
 async function ensureSettingsRow() {
@@ -161,15 +184,10 @@ export const useSettingsStore = create<SettingsState>()(
           });
 
           // 2) Recreate default settings row, but DO NOT allow seeding again
-          const defaults = { ...INITIAL_SETTINGS, seedingDone: true };
-          try {
-            await db.settings.add({ id: 1, ...defaults } as any);
+         try {
+            await db.settings.add(DB_DEFAULT_SETTINGS as any);
           } catch {
-            try {
-              await db.settings.put({ id: 1, ...defaults } as any, 1 as any);
-            } catch (e) {
-              console.warn('settings re-seed failed:', e);
-            }
+            await db.settings.put(DB_DEFAULT_SETTINGS as any, 1 as any); // UPDATED: fixed 'await' typo
           }
 
           // 3) Remove any persisted slices if you use them
@@ -181,12 +199,11 @@ export const useSettingsStore = create<SettingsState>()(
           try { useWorkoutsStore.getState().reset?.(); } catch { }
           try { useExercisesStore.getState().reset?.(); } catch { }
 
-          // (Optional) 5) If you prefer, reload empties from DB
-          // await useWorkoutsStore.getState().loadWorkouts();
-          // await useExercisesStore.getState().loadExercises();
+          // 5) Mark local guard so next cold boot won't seed
+          markSeededGuard(); // NEW
 
           // 6) Reset this store to defaults (but with seedingDone true)
-          set({ ...defaults });
+          set({ ...RESET_DEFAULTS });
         } catch (error) {
           console.error('Error resetting data:', error);
           throw error;

@@ -7,15 +7,15 @@ type ExportCsvOptions = {
   exerciseIds?: number[]; // optional: filter by specific exercises
 };
 
-function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
-function endOfDay(d: Date) { const x = new Date(d); x.setHours(23,59,59,999); return x; }
+function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function endOfDay(d: Date) { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; }
 
-export async function exportWorkoutsCSV( opts: ExportCsvOptions = {}): Promise<string> {
+export async function exportWorkoutsCSV(opts: ExportCsvOptions = {}): Promise<string> {
   const dateStart = opts.dateStart ? startOfDay(opts.dateStart) : null;
   const dateEnd = opts.dateEnd ? endOfDay(opts.dateEnd) : null;
   const exerciseFilterSet = opts.exerciseIds ? new Set(opts.exerciseIds) : null;
   //const workouts = await db.workouts.orderBy('date').toArray();
-   // 1) Load exercise names for join
+  // 1) Load exercise names for join
   const exercises = await db.exercises.toArray();
   const nameById = new Map<number, string>(
     exercises.map((e: any) => [e.id as number, e.name as string])
@@ -86,55 +86,24 @@ export async function importCSV(content: string): Promise<ImportSummary> {
       let exerciseId: number | undefined = row.ExerciseId ? Number(row.ExerciseId) : undefined;
 
       // --- robust resolution of exerciseId ---
+      // Robust resolution of exerciseId by id or name; create as needed
       if (exerciseId) {
-        // If the id doesn't exist, try to resolve by name or create one
         const byId = await db.exercises.get(exerciseId);
         if (!byId) {
           if (nameCol) {
             const byName = await db.exercises.where('name').equals(nameCol).first();
-            if (byName) {
-              exerciseId = byName.id!;
-            } else {
-              exerciseId = await db.exercises.add({
-                name: nameCol,
-                category: 'Imported',
-                type: 'weight_reps',
-                notes: '',
-                custom: true,
-                createdAt: new Date()
-              });
-              createdExercises += 1;
-            }
+            exerciseId = byName ? byName.id! : await db.exercises.add({ name: nameCol, category: 'Imported', type: 'weight_reps', notes: '', custom: true, createdAt: new Date() });
+            if (!byName) createdExercises += 1;
           } else {
-            // No name provided either; create a generic imported exercise
-            exerciseId = await db.exercises.add({
-              name: 'Imported Exercise',
-              category: 'Imported',
-              type: 'weight_reps',
-              notes: '',
-              custom: true,
-              createdAt: new Date()
-            });
+            exerciseId = await db.exercises.add({ name: 'Imported Exercise', category: 'Imported', type: 'weight_reps', notes: '', custom: true, createdAt: new Date() });
             createdExercises += 1;
           }
         }
       } else {
-        // No ExerciseId: resolve or create by name
         if (!nameCol) { errors.push(`Missing Exercise/ExerciseId on ${date}`); continue; }
         const byName = await db.exercises.where('name').equals(nameCol).first();
-        if (!byName) {
-          exerciseId = await db.exercises.add({
-            name: nameCol,
-            category: 'Imported',
-            type: 'weight_reps',
-            notes: '',
-            custom: true,
-            createdAt: new Date()
-          });
-          createdExercises += 1;
-        } else {
-          exerciseId = byName.id!;
-        }
+        exerciseId = byName ? byName.id! : await db.exercises.add({ name: nameCol, category: 'Imported', type: 'weight_reps', notes: '', custom: true, createdAt: new Date() });
+        if (!byName) createdExercises += 1;
       }
       // --- end robust resolution ---
 
@@ -150,15 +119,10 @@ export async function importCSV(content: string): Promise<ImportSummary> {
       const timeSec = row.TimeSec ? Number(row.TimeSec) : undefined;
 
       const exEntry = workout.exercises.find(e => e.exerciseId === exerciseId);
-      const newSet = {
-        id: `${Date.now()}-${Math.random()}`,
-        weight, reps, distance, timeSec,
-        note: row.Note ?? '',
-        createdAt: new Date()
-      };
+      const newSet = { id: `${Date.now()}-${Math.random()}`, weight, reps, distance, timeSec, note: row.Note ?? '', createdAt: new Date() }; // UPDATED
 
       if (exEntry) {
-        const duplicate = exEntry.sets.some(s => s.weight===weight && s.reps===reps && s.distance===distance && s.timeSec===timeSec);
+        const duplicate = exEntry.sets.some(s => s.weight === weight && s.reps === reps && s.distance === distance && s.timeSec === timeSec);
         if (duplicate) { duplicatesSkipped += 1; continue; }
         exEntry.sets.push(newSet as any);
       } else {
@@ -170,6 +134,15 @@ export async function importCSV(content: string): Promise<ImportSummary> {
     } catch (e: any) {
       errors.push(e.message);
     }
+  }
+
+  // Ensure settings exist and prevent any future "first-run" seeding path
+  // NEW: Guarantee settings row and mark as post-import state
+  const hasSettings = await db.settings.get(1 as any);
+  if (hasSettings) {
+    await db.settings.update(1 as any, { seedingDone: true } as any);
+  } else {
+    await db.settings.add({ id: 1, theme: 'dark', units: 'metric', weightIncrement: 2.5, timerSound: true, seedingDone: true } as any);
   }
 
   return { createdExercises, setsAdded, duplicatesSkipped, errors };
