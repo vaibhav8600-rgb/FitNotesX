@@ -93,22 +93,26 @@ export default function CalendarPopup({ isOpen, onClose }: CalendarPopupProps) {
         className="bg-background border border-border rounded-lg shadow-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="p-4">
-          
+
           {/* Month Navigation */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between h-12 px-4">
             <Button
+              variant="ghost"
               size="sm"
+              className="text-muted-foreground hover:text-foreground"
               onClick={handlePrevMonth}
             >
               <ChevronLeft size={20} />
             </Button>
-            
+
             <h3 className="text-lg font-medium text-fitnotes-teal">
               {format(currentMonth, 'MMMM yyyy')}
             </h3>
-            
+
             <Button
+              variant="ghost"
               size="sm"
+              className="text-muted-foreground hover:text-foreground"
               onClick={handleNextMonth}
             >
               <ChevronRight size={20} />
@@ -143,12 +147,12 @@ export default function CalendarPopup({ isOpen, onClose }: CalendarPopupProps) {
                       onClick={() => handleDateClick(date)}
                       className={`
                         relative p-2 text-sm rounded-md transition-colors
-                        ${isCurrentMonth 
-                          ? 'text-foreground hover:bg-secondary' 
+                        ${isCurrentMonth
+                          ? 'text-foreground hover:bg-secondary'
                           : 'text-muted-foreground'
                         }
-                        ${isCurrentDay 
-                          ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                        ${isCurrentDay
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                           : ''
                         }
                       `}
@@ -156,7 +160,7 @@ export default function CalendarPopup({ isOpen, onClose }: CalendarPopupProps) {
                       <span className="relative z-10">
                         {format(date, 'd')}
                       </span>
-                      
+
                       {/* Workout Indicator */}
                       {hasWorkoutData && !isCurrentDay && (
                         <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-primary rounded-full" />

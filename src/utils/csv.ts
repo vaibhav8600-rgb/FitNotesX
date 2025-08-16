@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { db, Workout, Exercise } from '@/db/dexie';
+import { normalizeCategoryName, toCategoryDisplayName } from '@/utils/normalize';
 
 type ExportCsvOptions = {
   dateStart?: Date | null;
@@ -67,6 +68,8 @@ export interface ImportSummary {
   setsAdded: number;
   duplicatesSkipped: number;
   errors: string[];
+  categoriesMatched?: number;
+  categoriesCreated?: number;
 }
 
 export async function importCSV(content: string): Promise<ImportSummary> {
@@ -75,15 +78,62 @@ export async function importCSV(content: string): Promise<ImportSummary> {
   let createdExercises = 0;
   let setsAdded = 0;
   let duplicatesSkipped = 0;
+  let categoriesMatched = 0;
+  let categoriesCreated = 0;
+
 
   if (parsed.errors.length) errors.push(...parsed.errors.map(e => e.message));
   const rows = parsed.data as any[];
 
+  // ---------- NEW: preload & build maps for idempotent, case-insensitive matching ----------
+  const allExercises = await db.exercises.toArray();
+  const exerciseByNameNorm = new Map<string, Exercise>();
+  const categoryDisplayByNorm = new Map<string, string>();
+
+  for (const ex of allExercises) {
+    exerciseByNameNorm.set(ex.name.trim().toLowerCase(), ex);
+    const cNorm = normalizeCategoryName(ex.category);
+    if (!categoryDisplayByNorm.has(cNorm)) categoryDisplayByNorm.set(cNorm, ex.category);
+  }
+  // ----------------------------------------------------------------------------------------
+
   for (const row of rows) {
     try {
       const date = String(row.Date);
+      if (!date) { errors.push('Missing Date'); continue; }
+
+      // Resolve (optional) category from CSV
+      // If present+non-empty -> use case-insensitive resolution; else will fallback to 'Imported'
+      let categoryFromCsv: string | undefined;
+      if (typeof row.Category !== 'undefined') {
+        const raw = String(row.Category ?? '').trim();
+        if (raw) {
+          const norm = normalizeCategoryName(raw);
+          const resolved = categoryDisplayByNorm.get(norm);
+          if (resolved) {
+            // existing category (case-insensitive match)
+            categoryFromCsv = resolved;
+            categoriesMatched += 1;
+          } else {
+            // create new display name once (Title Case), remember it
+            const display = toCategoryDisplayName(raw);
+            categoryDisplayByNorm.set(norm, display);
+            categoryFromCsv = display;
+            categoriesCreated += 1;
+          }
+        }
+      }
+
+
       const nameCol = (row.Exercise ?? '').toString().trim();
       let exerciseId: number | undefined = row.ExerciseId ? Number(row.ExerciseId) : undefined;
+
+      // Resolve workout by date
+      let workout = await db.workouts.where('date').equals(date).first();
+      if (!workout) {
+        const id = await db.workouts.add({ date, exercises: [], createdAt: new Date() });
+        workout = await db.workouts.get(id as number) as Workout;
+      }
 
       // --- robust resolution of exerciseId ---
       // Robust resolution of exerciseId by id or name; create as needed
@@ -91,27 +141,76 @@ export async function importCSV(content: string): Promise<ImportSummary> {
         const byId = await db.exercises.get(exerciseId);
         if (!byId) {
           if (nameCol) {
-            const byName = await db.exercises.where('name').equals(nameCol).first();
-            exerciseId = byName ? byName.id! : await db.exercises.add({ name: nameCol, category: 'Imported', type: 'weight_reps', notes: '', custom: true, createdAt: new Date() });
-            if (!byName) createdExercises += 1;
+            const byName = exerciseByNameNorm.get(nameCol.toLowerCase()) ||
+              await db.exercises.where('name').equals(nameCol).first();
+            if (byName) {
+              exerciseId = byName.id!;
+            } else {
+              // CREATE with category honoring CSV if provided, else 'Imported'
+              const category = categoryFromCsv ?? 'Imported'; // <— UPDATED HERE
+              const newId = await db.exercises.add({
+                name: nameCol,
+                category,
+                type: 'weight_reps',
+                notes: '',
+                custom: true,
+                createdAt: new Date()
+              } as any);
+              exerciseId = newId as number;
+              createdExercises += 1;
+
+              // keep maps fresh
+              exerciseByNameNorm.set(nameCol.toLowerCase(), { id: newId as number, name: nameCol, category } as any);
+              const cNorm = normalizeCategoryName(category);
+              if (!categoryDisplayByNorm.has(cNorm)) categoryDisplayByNorm.set(cNorm, category);
+            }
           } else {
-            exerciseId = await db.exercises.add({ name: 'Imported Exercise', category: 'Imported', type: 'weight_reps', notes: '', custom: true, createdAt: new Date() });
+            // CREATE fallback
+            const category = categoryFromCsv ?? 'Imported'; // <— UPDATED HERE
+            const newId = await db.exercises.add({
+              name: 'Imported Exercise',
+              category,
+              type: 'weight_reps',
+              notes: '',
+              custom: true,
+              createdAt: new Date()
+            } as any);
+            exerciseId = newId as number;
             createdExercises += 1;
+
+            // keep maps fresh
+            exerciseByNameNorm.set('imported exercise', { id: newId as number, name: 'Imported Exercise', category } as any);
+            const cNorm = normalizeCategoryName(category);
+            if (!categoryDisplayByNorm.has(cNorm)) categoryDisplayByNorm.set(cNorm, category);
           }
         }
       } else {
         if (!nameCol) { errors.push(`Missing Exercise/ExerciseId on ${date}`); continue; }
-        const byName = await db.exercises.where('name').equals(nameCol).first();
-        exerciseId = byName ? byName.id! : await db.exercises.add({ name: nameCol, category: 'Imported', type: 'weight_reps', notes: '', custom: true, createdAt: new Date() });
-        if (!byName) createdExercises += 1;
+        const byName = exerciseByNameNorm.get(nameCol.toLowerCase()) ||
+          await db.exercises.where('name').equals(nameCol).first();
+        if (byName) {
+          exerciseId = byName.id!;
+        } else {
+          // CREATE with category honoring CSV if provided, else 'Imported'
+          const category = categoryFromCsv ?? 'Imported'; // <— UPDATED HERE
+          const newId = await db.exercises.add({
+            name: nameCol,
+            category,
+            type: 'weight_reps',
+            notes: '',
+            custom: true,
+            createdAt: new Date()
+          } as any);
+          exerciseId = newId as number;
+          createdExercises += 1;
+
+          // keep maps fresh
+          exerciseByNameNorm.set(nameCol.toLowerCase(), { id: newId as number, name: nameCol, category } as any);
+          const cNorm = normalizeCategoryName(category);
+          if (!categoryDisplayByNorm.has(cNorm)) categoryDisplayByNorm.set(cNorm, category);
+        }
       }
       // --- end robust resolution ---
-
-      let workout = await db.workouts.where('date').equals(date).first();
-      if (!workout) {
-        const id = await db.workouts.add({ date, exercises: [], createdAt: new Date() });
-        workout = await db.workouts.get(id as number) as Workout;
-      }
 
       const weight = row.Weight ? Number(row.Weight) : undefined;
       const reps = row.Reps ? Number(row.Reps) : undefined;
@@ -145,5 +244,5 @@ export async function importCSV(content: string): Promise<ImportSummary> {
     await db.settings.add({ id: 1, theme: 'dark', units: 'metric', weightIncrement: 2.5, timerSound: true, seedingDone: true } as any);
   }
 
-  return { createdExercises, setsAdded, duplicatesSkipped, errors };
+  return { createdExercises, setsAdded, duplicatesSkipped, errors, categoriesMatched, categoriesCreated };
 }
