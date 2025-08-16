@@ -36,7 +36,7 @@ export const useExercisesStore = create<ExercisesState>((set, get) => ({
       const id = await db.exercises.add({
         ...exerciseData,
         createdAt: new Date()
-      });
+      } as any);
       
       await get().loadExercises();
       return id as number;

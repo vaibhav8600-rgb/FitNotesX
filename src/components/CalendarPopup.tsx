@@ -97,19 +97,17 @@ export default function CalendarPopup({ isOpen, onClose }: CalendarPopupProps) {
           {/* Month Navigation */}
           <div className="flex items-center justify-between mb-4">
             <Button
-              variant="ghost"
               size="sm"
               onClick={handlePrevMonth}
             >
               <ChevronLeft size={20} />
             </Button>
             
-            <h3 className="text-lg font-medium">
+            <h3 className="text-lg font-medium text-fitnotes-teal">
               {format(currentMonth, 'MMMM yyyy')}
             </h3>
             
             <Button
-              variant="ghost"
               size="sm"
               onClick={handleNextMonth}
             >

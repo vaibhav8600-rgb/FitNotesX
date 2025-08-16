@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useExercisesStore } from '@/store/exercisesStore';
 import { useWorkoutsStore } from '@/store/workoutsStore';
+import { useSettingsStore } from '@/store/settingsStore';        // NEW
+import { markSeededGuard } from '@/app/bootstrap';
 
 interface ImportPreview {
   type: 'csv' | 'json';
@@ -33,6 +35,7 @@ export default function Import() {
   const navigate = useNavigate();
   const { loadExercises } = useExercisesStore();
   const { loadWorkouts, loadWorkoutByDate, currentDate } = useWorkoutsStore();
+  const { setSeedingDone } = useSettingsStore();                 // NEW
 
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +169,10 @@ export default function Import() {
       await loadExercises();
       await loadWorkouts();
       await loadWorkoutByDate(currentDate);
+
+      // Ensure future cold boots never treat this as first-run
+      await setSeedingDone(true);                                // NEW (DB flag)
+      try { markSeededGuard(); } catch { }
 
 
       if (importResult.success) {

@@ -26,11 +26,12 @@ import Backup from "./pages/Backup";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { hasSeededGuard, markSeededGuard } from "@/app/bootstrap"; // NEW
 
 const queryClient = new QueryClient();
 
 function AppContent() {
-  const { loadSettings, seedingDone, setSeedingDone } = useSettingsStore();
+  const { loadSettings, setSeedingDone } = useSettingsStore();
   const { loadExercises } = useExercisesStore();
   const { loadWorkouts } = useWorkoutsStore();
 
@@ -41,18 +42,21 @@ function AppContent() {
       await loadExercises();
       await loadWorkouts();
       
-      // Seed data if not done
-      if (!seedingDone) {
+       // UPDATED: Re-read fresh value AFTER loadSettings()
+      const seededNow = useSettingsStore.getState().seedingDone; // NEW
+      const guard = hasSeededGuard(); // NEW
+
+      if (!seededNow && !guard) { // NEW
         await seedDatabase();
         await setSeedingDone(true);
-        // Reload data after seeding
+        markSeededGuard(); // NEW
         await loadExercises();
         await loadWorkouts();
       }
     };
     
     initializeApp();
-  }, [loadSettings, loadExercises, loadWorkouts, seedingDone, setSeedingDone]);
+  }, [loadSettings, loadExercises, loadWorkouts, setSeedingDone]);
 
   return (
     <ErrorBoundary>

@@ -73,7 +73,7 @@ export class FitNotesDB extends Dexie {
 
   constructor() {
     super('FitNotesDB');
-    
+
     this.version(1).stores({
       exercises: '++id, name, category, type, custom, createdAt',
       workouts: '++id, date, createdAt',
@@ -103,16 +103,13 @@ export class FitNotesDB extends Dexie {
 
 export const db = new FitNotesDB();
 
-// Initialize default settings
+// UPDATED: single stable row id=1; default seedingDone:true (never auto-seed)
 db.on('ready', async () => {
-  const settingsCount = await db.settings.count();
-  if (settingsCount === 0) {
-    await db.settings.add({
-      theme: 'dark',
-      units: 'metric',
-      weightIncrement: 2.5,
-      timerSound: true,
-      seedingDone: false
-    });
+  const existing = await db.settings.get(1 as any);
+  if (!existing) {
+    await db.settings.put(
+      { id: 1, theme: 'dark', units: 'metric', weightIncrement: 2.5, timerSound: true, seedingDone: true } as any,
+      1 as any
+    );
   }
 });
