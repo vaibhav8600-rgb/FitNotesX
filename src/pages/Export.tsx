@@ -78,7 +78,12 @@ export default function Export() {
 
       if (exportFormat === 'csv') {
         const { exportWorkoutsCSV } = await import('@/utils/csv');
-        const csv = await exportWorkoutsCSV();
+        const csv = await exportWorkoutsCSV({
+        dateStart: dateFilter?.start ?? null,
+        dateEnd:   dateFilter?.end   ?? null,
+        // If you add exercise filters later, pass them here as well:
+        // exerciseIds: selectedExerciseIds ?? undefined
+      });
         
         clearInterval(progressInterval);
         setExportProgress(100);

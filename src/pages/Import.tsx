@@ -9,6 +9,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useExercisesStore } from '@/store/exercisesStore';
+import { useWorkoutsStore } from '@/store/workoutsStore';
 
 interface ImportPreview {
   type: 'csv' | 'json';
@@ -29,9 +31,12 @@ interface ImportResult {
 
 export default function Import() {
   const navigate = useNavigate();
+  const { loadExercises } = useExercisesStore();
+  const { loadWorkouts, loadWorkoutByDate, currentDate } = useWorkoutsStore();
+
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -50,7 +55,7 @@ export default function Import() {
   const analyzeFile = async (file: File): Promise<ImportPreview> => {
     const text = await file.text();
     const isJSON = file.name.endsWith('.json');
-    
+
     if (isJSON) {
       try {
         const data = JSON.parse(text);
@@ -111,7 +116,7 @@ export default function Import() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       handleFileSelect(files[0]);
@@ -126,7 +131,7 @@ export default function Import() {
 
     try {
       const text = await selectedFile.text();
-      
+
       // Simulate progress updates
       const progressInterval = setInterval(() => {
         setImportProgress(prev => Math.min(prev + 10, 90));
@@ -157,11 +162,16 @@ export default function Import() {
       clearInterval(progressInterval);
       setImportProgress(100);
       setResult(importResult);
+      // Refresh in-memory state so pages reflect imported data
+      await loadExercises();
+      await loadWorkouts();
+      await loadWorkoutByDate(currentDate);
+
 
       if (importResult.success) {
         toast({
           title: 'Import completed',
-          description: preview.type === 'csv' 
+          description: preview.type === 'csv'
             ? `${importResult.setsAdded} sets imported, ${importResult.duplicatesSkipped} duplicates skipped`
             : 'Backup imported successfully',
         });
@@ -201,11 +211,11 @@ export default function Import() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header 
-        title="Import Data" 
+      <Header
+        title="Import Data"
         onMenuClick={() => navigate(-1)}
       />
-      
+
       <div className="p-4 space-y-6 pb-20">
         {/* File Upload */}
         <Card>
@@ -219,8 +229,8 @@ export default function Import() {
             <div
               className={cn(
                 'border-2 border-dashed rounded-lg p-8 text-center transition-colors',
-                isDragOver 
-                  ? 'border-primary bg-primary/5' 
+                isDragOver
+                  ? 'border-primary bg-primary/5'
                   : 'border-muted-foreground/25 hover:border-muted-foreground/50'
               )}
               onDrop={handleDrop}
@@ -334,7 +344,7 @@ export default function Import() {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    {preview.conflicts.length} potential conflicts detected. 
+                    {preview.conflicts.length} potential conflicts detected.
                     Existing data will be preserved.
                   </AlertDescription>
                 </Alert>
@@ -368,7 +378,7 @@ export default function Import() {
                 ) : (
                   <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
                 )}
-                
+
                 <div>
                   <h3 className="text-lg font-semibold">
                     {result.success ? 'Import Completed' : 'Import Failed'}

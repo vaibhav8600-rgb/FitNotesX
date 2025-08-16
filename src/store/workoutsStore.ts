@@ -6,24 +6,25 @@ export interface WorkoutsState {
   workouts: Workout[];
   currentDate: string;
   currentWorkout: Workout | null;
-  
+
   loadWorkouts: () => Promise<void>;
   loadWorkoutByDate: (date: string) => Promise<void>;
   createWorkout: (date: string, exercises?: WorkoutExercise[]) => Promise<number>;
   updateWorkout: (id: number, updates: Partial<Workout>) => Promise<void>;
   deleteWorkout: (id: number) => Promise<void>;
-  
+
   addExerciseToWorkout: (workoutId: number, exerciseId: number) => Promise<void>;
   removeExerciseFromWorkout: (workoutId: number, exerciseId: number) => Promise<void>;
-  
+
   addSetToExercise: (workoutId: number, exerciseId: number, set: Omit<Set, 'id' | 'createdAt'>) => Promise<void>;
   updateSet: (workoutId: number, exerciseId: number, setId: string, updates: Partial<Set>) => Promise<void>;
   deleteSet: (workoutId: number, exerciseId: number, setId: string) => Promise<void>;
-  
+
   setCurrentDate: (date: string) => void;
   getCurrentWorkout: () => Workout | null;
   getWorkoutByDate: (date: string) => Workout | undefined;
   getWorkoutDates: () => string[];
+  reset: () => void; // <— NEW
 }
 
 export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
@@ -56,10 +57,10 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
         exercises,
         createdAt: new Date()
       });
-      
+
       await get().loadWorkouts();
       await get().loadWorkoutByDate(date);
-      
+
       return id as number;
     } catch (error) {
       console.error('Error creating workout:', error);
@@ -71,7 +72,7 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
     try {
       await db.workouts.update(id, updates);
       await get().loadWorkouts();
-      
+
       const { currentDate } = get();
       await get().loadWorkoutByDate(currentDate);
     } catch (error) {
@@ -84,7 +85,7 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
     try {
       await db.workouts.delete(id);
       await get().loadWorkouts();
-      
+
       const { currentDate } = get();
       await get().loadWorkoutByDate(currentDate);
     } catch (error) {
@@ -97,19 +98,19 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
     try {
       const workout = await db.workouts.get(workoutId);
       if (!workout) throw new Error('Workout not found');
-      
+
       // Check if exercise already exists in workout
       const existingExercise = workout.exercises.find(ex => ex.exerciseId === exerciseId);
       if (existingExercise) return;
-      
+
       const updatedExercises = [
         ...workout.exercises,
         { exerciseId, sets: [] }
       ];
-      
+
       await db.workouts.update(workoutId, { exercises: updatedExercises });
       await get().loadWorkouts();
-      
+
       const { currentDate } = get();
       await get().loadWorkoutByDate(currentDate);
     } catch (error) {
@@ -122,12 +123,12 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
     try {
       const workout = await db.workouts.get(workoutId);
       if (!workout) throw new Error('Workout not found');
-      
+
       const updatedExercises = workout.exercises.filter(ex => ex.exerciseId !== exerciseId);
-      
+
       await db.workouts.update(workoutId, { exercises: updatedExercises });
       await get().loadWorkouts();
-      
+
       const { currentDate } = get();
       await get().loadWorkoutByDate(currentDate);
     } catch (error) {
@@ -140,13 +141,13 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
     try {
       const workout = await db.workouts.get(workoutId);
       if (!workout) throw new Error('Workout not found');
-      
+
       const set: Set = {
         ...setData,
         id: `${Date.now()}-${Math.random()}`,
         createdAt: new Date()
       };
-      
+
       const updatedExercises = workout.exercises.map(ex => {
         if (ex.exerciseId === exerciseId) {
           return {
@@ -156,10 +157,10 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
         }
         return ex;
       });
-      
+
       await db.workouts.update(workoutId, { exercises: updatedExercises });
       await get().loadWorkouts();
-      
+
       const { currentDate } = get();
       await get().loadWorkoutByDate(currentDate);
     } catch (error) {
@@ -172,22 +173,22 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
     try {
       const workout = await db.workouts.get(workoutId);
       if (!workout) throw new Error('Workout not found');
-      
+
       const updatedExercises = workout.exercises.map(ex => {
         if (ex.exerciseId === exerciseId) {
           return {
             ...ex,
-            sets: ex.sets.map(set => 
+            sets: ex.sets.map(set =>
               set.id === setId ? { ...set, ...updates } : set
             )
           };
         }
         return ex;
       });
-      
+
       await db.workouts.update(workoutId, { exercises: updatedExercises });
       await get().loadWorkouts();
-      
+
       const { currentDate } = get();
       await get().loadWorkoutByDate(currentDate);
     } catch (error) {
@@ -200,7 +201,7 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
     try {
       const workout = await db.workouts.get(workoutId);
       if (!workout) throw new Error('Workout not found');
-      
+
       const updatedExercises = workout.exercises.map(ex => {
         if (ex.exerciseId === exerciseId) {
           return {
@@ -210,10 +211,10 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
         }
         return ex;
       });
-      
+
       await db.workouts.update(workoutId, { exercises: updatedExercises });
       await get().loadWorkouts();
-      
+
       const { currentDate } = get();
       await get().loadWorkoutByDate(currentDate);
     } catch (error) {
@@ -238,5 +239,13 @@ export const useWorkoutsStore = create<WorkoutsState>((set, get) => ({
   getWorkoutDates: () => {
     const { workouts } = get();
     return workouts.map(workout => workout.date);
-  }
+  },
+  // in the store create call, add:
+  reset: () => {
+    set({
+      workouts: [],
+      currentWorkout: null,
+      currentDate: format(new Date(), 'yyyy-MM-dd'),
+    });
+  },
 }));

@@ -21,13 +21,14 @@ export default function Home() {
     currentDate,
   } = useWorkoutsStore();
 
-  const { exercises } = useExercisesStore();
+  const { exercises, loadExercises } = useExercisesStore();
   const { units } = useSettingsStore(); // for kg/lb display
 
   useEffect(() => {
     loadWorkoutByDate(currentDate);
     setStoreCurrentDate(currentDate);
-  }, [currentDate, loadWorkoutByDate, setStoreCurrentDate]);
+    loadExercises();
+  }, [currentDate, loadWorkoutByDate, setStoreCurrentDate, loadExercises]);
 
   const handlePrevDay = () => {
     const prevDate = format(subDays(new Date(currentDate), 1), 'yyyy-MM-dd');

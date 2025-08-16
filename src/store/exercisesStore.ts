@@ -14,6 +14,7 @@ export interface ExercisesState {
   setSelectedCategory: (category: string) => void;
   getFilteredExercises: () => Exercise[];
   getCategories: () => string[];
+  reset: () => void; // <— NEW
 }
 
 export const useExercisesStore = create<ExercisesState>((set, get) => ({
@@ -108,5 +109,13 @@ export const useExercisesStore = create<ExercisesState>((set, get) => ({
     });
     
     return ['ALL', 'CUSTOM', ...Array.from(categories).sort()];
-  }
+  },
+
+  reset: () => {
+    set({
+      exercises: [],
+      searchQuery: '',
+      selectedCategory: 'ALL',
+    });
+  },
 }));
