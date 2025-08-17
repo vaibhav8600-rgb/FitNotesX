@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, MoreVertical } from 'lucide-react'; // NEW
 import Header from '@/components/Header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,10 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,            // NEW
+  DropdownMenuTrigger,     // NEW
+  DropdownMenuContent,     // NEW
+  DropdownMenuItem,        // NEW
+} from '@/components/ui/dropdown-menu'; // NEW
 import { useExercisesStore } from '@/store/exercisesStore';
 import { useWorkoutsStore } from '@/store/workoutsStore';
 import { useNavigate } from 'react-router-dom';
-import { Exercise } from '@/db/dexie';
+import { db, Exercise } from '@/db/dexie'; // UPDATED: import db for delete cascade
 
 const EXERCISE_TYPES = [
   { value: 'weight_reps', label: 'Weight & Reps' },
@@ -38,11 +43,20 @@ const CATEGORIES = [
   'Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core', 'Cardio'
 ];
 
+type EditForm = {            // NEW
+  id: number;
+  name: string;
+  category: string;          // selected value (existing category or "__new__")
+  type: Exercise['type'];
+  notes?: string;
+  newCategory?: string;      // when "__new__" chosen
+};
+
 export default function Exercises() {
   const navigate = useNavigate();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState('ALL');
-  
+
   const {
     exercises,
     searchQuery,
@@ -52,16 +66,18 @@ export default function Exercises() {
     addExercise,
     loadExercises
   } = useExercisesStore();
-  
-  useEffect(() => {
-  loadExercises();
-}, [loadExercises]);
 
-  const { 
-    currentWorkout, 
-    currentDate, 
-    createWorkout, 
-    addExerciseToWorkout 
+  useEffect(() => {
+    loadExercises();
+  }, [loadExercises]);
+
+  const {
+    currentWorkout,
+    currentDate,
+    createWorkout,
+    addExerciseToWorkout,
+    loadWorkouts, // NEW: refresh after delete
+    loadWorkoutByDate, // NEW: refresh after delete
   } = useWorkoutsStore();
 
   const [newExercise, setNewExercise] = useState({
@@ -71,19 +87,26 @@ export default function Exercises() {
     notes: ''
   });
 
+  // --- Edit/Delete state (NEW) ---
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Exercise | null>(null);
+  const [usageCount, setUsageCount] = useState<number>(0);
+
   const tabs = ['ALL', 'CUSTOM', 'CATEGORIES', 'ROUTINES'];
   const filteredExercises = getFilteredExercises();
-  const categories = getCategories().filter(cat => !['ALL', 'CUSTOM'].includes(cat));
+  const categoriesAll = getCategories().filter(cat => !['ALL', 'CUSTOM'].includes(cat)); // UPDATED
 
   const handleAddExercise = async () => {
     if (!newExercise.name.trim() || !newExercise.category.trim()) return;
-    
+
     try {
       await addExercise({
         ...newExercise,
         custom: true
       });
-      
+
       setNewExercise({
         name: '',
         category: '',
@@ -99,17 +122,17 @@ export default function Exercises() {
   const handleExerciseClick = async (exercise: Exercise) => {
     try {
       let workoutId = currentWorkout?.id;
-      
+
       // Create workout if it doesn't exist
       if (!workoutId) {
         workoutId = await createWorkout(currentDate);
       }
-      
+
       // Add exercise to workout
       if (workoutId && exercise.id) {
         await addExerciseToWorkout(workoutId, exercise.id);
       }
-      
+
       // Navigate to training
       navigate(`/training/${exercise.id}`);
     } catch (error) {
@@ -117,18 +140,154 @@ export default function Exercises() {
     }
   };
 
+  // ====== EDIT (NEW) =========================================================
+  const openEdit = (ex: Exercise) => {
+    // default to current category; user can switch to "__new__"
+    setEditForm({
+      id: ex.id!,
+      name: ex.name,
+      category: ex.category || '', // existing category
+      type: ex.type,
+      notes: ex.notes || '',
+      newCategory: '',
+    });
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editForm) return;
+
+    const name = editForm.name.trim().replace(/\s+/g, ' ');
+    if (!name) return;
+
+    // case-insensitive uniqueness, excluding current id
+    const dup = exercises.some(
+      (e) => e.id !== editForm.id && e.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (dup) {
+      console.error('Duplicate name');
+      return;
+    }
+
+    // Determine category to save
+    let categoryToSave = editForm.category;
+    if (editForm.category === '__new__') {
+      const nc = (editForm.newCategory || '').trim().replace(/\s+/g, ' ');
+      if (!nc) {
+        console.error('New category required');
+        return;
+      }
+      categoryToSave = nc;
+    }
+
+    try {
+      await db.exercises.update(editForm.id, {
+        name,
+        category: categoryToSave,
+        type: editForm.type,
+        notes: editForm.notes?.trim() || undefined,
+      });
+      await loadExercises();
+      setEditOpen(false);
+      setEditForm(null);
+    } catch (e) {
+      console.error('Edit failed', e);
+    }
+  };
+
+  // ====== DELETE (NEW) =======================================================
+  const openDelete = async (ex: Exercise) => {
+    setPendingDelete(ex);
+    // count how many workouts reference this exercise
+    const ws = await db.workouts.toArray();
+    const count = ws.reduce(
+      (acc, w) => acc + ((w.exercises || []).some((e) => e.exerciseId === ex.id) ? 1 : 0),
+      0
+    );
+    setUsageCount(count);
+    setConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const ex = pendingDelete;
+    if (!ex?.id) return;
+    try {
+      await db.transaction('rw', [db.workouts, db.exercises], async () => {
+        // remove from all workouts
+        const ws = await db.workouts.toArray();
+        const changed: { id: number; exercises: any[] }[] = [];
+        for (const w of ws) {
+          const filtered = (w.exercises || []).filter((e: any) => e.exerciseId !== ex.id);
+          if (filtered.length !== (w.exercises || []).length) {
+            changed.push({ id: w.id!, exercises: filtered });
+          }
+        }
+        if (changed.length) {
+          await Promise.all(changed.map((c) => db.workouts.update(c.id, { exercises: c.exercises })));
+        }
+        // delete exercise
+        await db.exercises.delete(ex.id);
+      });
+
+      // refresh memory
+      await loadExercises();
+      await loadWorkouts?.();
+      await loadWorkoutByDate?.(currentDate);
+    } catch (e) {
+      console.error('Delete failed', e);
+    } finally {
+      setConfirmOpen(false);
+      setPendingDelete(null);
+      setUsageCount(0);
+    }
+  };
+
+  // ====== UI fragments =======================================================
+  const KebabMenu = ({ exercise }: { exercise: Exercise }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => e.stopPropagation()} // prevent card click
+          aria-label="More actions"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        onClick={(e) => e.stopPropagation()} // prevent card click
+      >
+        <DropdownMenuItem
+          onClick={() => openEdit(exercise)}
+          onSelect={(e) => e.preventDefault()}
+        >
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => openDelete(exercise)}
+          onSelect={(e) => e.preventDefault()}
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const renderByCategory = () => {
-    const exercisesByCategory = categories.reduce((acc, category) => {
+    const exercisesByCategory = categoriesAll.reduce((acc, category) => {
       acc[category] = exercises.filter(ex => ex.category === category);
       return acc;
     }, {} as Record<string, Exercise[]>);
 
     return (
       <div className="space-y-6">
-        {categories.map(category => {
+        {categoriesAll.map(category => {
           const categoryExercises = exercisesByCategory[category] || [];
           if (categoryExercises.length === 0) return null;
-          
+
           return (
             <div key={category}>
               <h3 className="text-lg font-semibold text-primary mb-3">
@@ -136,20 +295,23 @@ export default function Exercises() {
               </h3>
               <div className="space-y-2">
                 {categoryExercises.map(exercise => (
-                  <Card 
+                  <Card
                     key={exercise.id}
                     className="cursor-pointer hover:bg-surface-secondary transition-colors"
                     onClick={() => handleExerciseClick(exercise)}
                   >
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <div>
                           <h4 className="font-medium">{exercise.name}</h4>
                           <p className="text-sm text-muted-foreground capitalize">
                             {exercise.type.replace('_', ' & ')}
                           </p>
                         </div>
-                        <Plus size={20} className="text-muted-foreground" />
+                        <div className="flex items-center gap-1">
+                         
+                          <KebabMenu exercise={exercise} /> {/* NEW */}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -176,13 +338,13 @@ export default function Exercises() {
     return (
       <div className="space-y-2">
         {filteredExercises.map(exercise => (
-          <Card 
+          <Card
             key={exercise.id}
             className="cursor-pointer hover:bg-surface-secondary transition-colors"
             onClick={() => handleExerciseClick(exercise)}
           >
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div>
                   <h4 className="font-medium">{exercise.name}</h4>
                   <div className="flex items-center space-x-2 mt-1">
@@ -194,7 +356,10 @@ export default function Exercises() {
                     </span>
                   </div>
                 </div>
-                <Plus size={20} className="text-muted-foreground" />
+                <div className="flex items-center gap-1">
+                  
+                  <KebabMenu exercise={exercise} /> {/* NEW */}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -205,11 +370,11 @@ export default function Exercises() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header 
-        title="Exercise Library" 
+      <Header
+        title="Exercise Library"
         onAddClick={() => setIsAddDialogOpen(true)}
       />
-      
+
       {/* Tabs */}
       <div className="bg-surface border-b border-border">
         <div className="flex items-center px-4">
@@ -261,7 +426,7 @@ export default function Exercises() {
                 placeholder="e.g., Barbell Rows"
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="exercise-category">Category</Label>
               <Select
@@ -280,7 +445,7 @@ export default function Exercises() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="exercise-type">Type</Label>
               <Select
@@ -299,7 +464,7 @@ export default function Exercises() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="exercise-notes">Notes (Optional)</Label>
               <Textarea
@@ -310,7 +475,7 @@ export default function Exercises() {
                 rows={3}
               />
             </div>
-            
+
             <div className="flex space-x-2">
               <Button
                 variant="outline"
@@ -327,6 +492,107 @@ export default function Exercises() {
                 Add Exercise
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Exercise Dialog (NEW) */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Edit Exercise</DialogTitle>
+          </DialogHeader>
+
+          {editForm && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  placeholder="Exercise name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select
+                  value={editForm.category}
+                  onValueChange={(v) => setEditForm({ ...editForm, category: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoriesAll.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__new__">Create new…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {editForm.category === '__new__' && (
+                  <Input
+                    className="mt-2"
+                    placeholder="New category"
+                    value={editForm.newCategory || ''}
+                    onChange={(e) => setEditForm({ ...editForm, newCategory: e.target.value })}
+                  />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select
+                  value={editForm.type}
+                  onValueChange={(v) => setEditForm({ ...editForm, type: v as Exercise['type'] })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXERCISE_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Notes (optional)</Label>
+                <Textarea
+                  value={editForm.notes ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button className="flex-1" onClick={saveEdit}>Save</Button>
+                <Button className="flex-1" variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Dialog (NEW) */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Delete Exercise?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {usageCount > 0
+              ? `This exercise appears in ${usageCount} workout(s). Deleting will remove it from all those workouts.`
+              : 'This will permanently delete the exercise.'}
+          </p>
+          <div className="flex gap-2 pt-2">
+            <Button variant="destructive" className="flex-1" onClick={confirmDelete}>Delete</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmOpen(false)}>Cancel</Button>
           </div>
         </DialogContent>
       </Dialog>

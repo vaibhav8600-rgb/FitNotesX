@@ -370,7 +370,7 @@ export default function Progress() {
             </div>
             
             <div className="space-y-6">
-              <div className="h-50">
+              <div className="h-48">
                 <Line
                   data={getFrequencyData(workouts, selectedRange)}
                   options={{
@@ -383,7 +383,7 @@ export default function Progress() {
                   }}
                 />
               </div>
-              <div className="h-50">
+              <div className="h-48">
                 <Bar
                   data={getVolumeData(workouts, selectedRange)}
                   options={{
@@ -398,7 +398,7 @@ export default function Progress() {
               </div>
 
               {/* Doughnut: Volume by Category */}
-              <div className="h-50">
+              <div className="h-64">
                 <Doughnut
                   data={categorySplitData}
                   options={{
