@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Minus, Trash2, Trophy, Clock } from 'lucide-react';
+import { Plus, Minus, Trash2, Trophy, Clock } from 'lucide-react';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import {
 import { useWorkoutsStore } from '@/store/workoutsStore';
 import { useExercisesStore } from '@/store/exercisesStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { Exercise, Set } from '@/db/dexie';
+import type { Exercise, Set } from '@/db/dexie'; // UPDATED: type-only import to avoid runtime error
 import { epley1RM, best1RMFromSets, isWeightRepsPR, isRepsPR } from '@/utils/pr';
 import { Line } from 'react-chartjs-2';
 import 'chart.js/auto';
@@ -44,7 +44,8 @@ export default function Training() {
   const { exercises } = useExercisesStore();
   const { units, weightIncrement } = useSettingsStore();
 
-  const [newSet, setNewSet] = useState<Partial<Set>>({});
+  const [newSet, setNewSet] = useState<Partial<Set>>({}); // holds weight/reps/time…
+  const [note, setNote] = useState<string>('');           // NEW: separate local state for note input
 
   // ---------- Timer ----------
   useEffect(() => {
@@ -104,6 +105,7 @@ export default function Training() {
   // Reset per-exercise UI state when exercise changes
   useEffect(() => {
     setNewSet({});
+    setNote('');          // NEW: clear note when switching exercises
     setActiveTab('TRACK');
   }, [exercise?.id]);
 
@@ -166,8 +168,14 @@ export default function Training() {
     if (!currentWorkout?.id || !exercise?.id) return;
 
     try {
-      await addSetToExercise(currentWorkout.id, exercise.id, newSet);
+      // NEW: include note if provided
+      const payload = note?.trim()
+        ? { ...newSet, note: note.trim() }
+        : { ...newSet };
+
+      await addSetToExercise(currentWorkout.id, exercise.id, payload as any);
       setNewSet({});
+      setNote(''); // NEW: clear note after adding
     } catch (error) {
       console.error('Error adding set:', error);
     }
@@ -209,7 +217,8 @@ export default function Training() {
     switch (exercise.type) {
       case 'weight_reps':
         return (
-          <div className="flex flex-col w-full gap-2">
+          <div className="flex flex-col w-full gap-3">
+            {/* Weight */}
             <div className="flex items-center justify-center">
               <Button
                 variant="outline"
@@ -255,6 +264,7 @@ export default function Training() {
               </span>
             </div>
 
+            {/* Reps */}
             <div className="flex items-center justify-center">
               <Button
                 variant="outline"
@@ -274,11 +284,13 @@ export default function Training() {
                 onChange={(e) =>
                   setNewSet((prev) => ({
                     ...prev,
-                    reps: Number.isFinite(parseInt(e.target.value)) ? parseInt(e.target.value) : 0,
+                    reps: Number.isFinite(parseInt(e.target.value))
+                      ? parseInt(e.target.value)
+                      : 0,
                   }))
                 }
                 onKeyDown={handleKeyDown}
-                className="w-16 mx-2 text-center"
+                className="w-20 mx-2 text-center"
                 placeholder="0"
               />
               <Button
@@ -293,8 +305,16 @@ export default function Training() {
               >
                 <Plus size={16} />
               </Button>
-              <span className="ml-2 text-sm text-muted-foreground">reps</span>
+              <span className="ml-2 text-sm text-muted-foreground">rp</span>
             </div>
+
+            {/* Note (optional) — NEW */}
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add note (optional)…"
+              className="text-sm"
+            />
           </div>
         );
 
@@ -320,7 +340,9 @@ export default function Training() {
               onChange={(e) =>
                 setNewSet((prev) => ({
                   ...prev,
-                  reps: Number.isFinite(parseInt(e.target.value)) ? parseInt(e.target.value) : 0,
+                  reps: Number.isFinite(parseInt(e.target.value))
+                    ? parseInt(e.target.value)
+                    : 0,
                 }))
               }
               onKeyDown={handleKeyDown}
@@ -479,54 +501,65 @@ export default function Training() {
                   <Card key={set.id}>
                     <CardContent className="p-3">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
-                            {index + 1}
-                          </span>
-                          <div className="text-sm">
-                            {set.weight != null && `${set.weight} ${units === 'metric' ? 'kg' : 'lb'}`}
-                            {set.weight != null && set.reps != null && ' × '}
-                            {set.reps != null && `${set.reps} reps`}
-                            {set.timeSec != null && formatTime(set.timeSec)}
-                            {exercise?.type === 'weight_reps' &&
-                              set.weight != null &&
-                              set.reps != null && (
-                                <span className="ml-2 text-muted-foreground">
-                                  (1RM {epley1RM(set.weight, set.reps)})
-                                </span>
-                              )}
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3">
+                            <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
+                              {index + 1}
+                            </span>
+                            <div className="text-sm">
+                              {set.weight != null && `${set.weight} ${units === 'metric' ? 'kg' : 'lb'}`}
+                              {set.weight != null && set.reps != null && ' × '}
+                              {set.reps != null && `${set.reps} reps`}
+                              {set.timeSec != null && formatTime(set.timeSec)}
+                              {exercise?.type === 'weight_reps' &&
+                                set.weight != null &&
+                                set.reps != null && (
+                                  <span className="ml-2 text-muted-foreground">
+                                    (1RM {epley1RM(set.weight, set.reps)})
+                                  </span>
+                                )}
+                            </div>
+
+                            {/* PR Badge */}
+                            {(() => {
+                              if (!exercise || !exerciseInWorkout) return null;
+                              if (exercise.type === 'weight_reps' && set.weight != null && set.reps != null) {
+                                const priorSets = exerciseInWorkout.sets.slice(0, index);
+                                const prevBest = best1RMFromSets(priorSets);
+                                return isWeightRepsPR(prevBest, set.weight, set.reps) ? (
+                                  <Badge variant="default">
+                                    <Trophy size={12} className="mr-1" />
+                                    PR
+                                  </Badge>
+                                ) : null;
+                              }
+                              if (
+                                (exercise.type === 'reps_only' || exercise.type === 'bodyweight') &&
+                                set.reps != null
+                              ) {
+                                const priorSets = exerciseInWorkout.sets
+                                  .slice(0, index)
+                                  .map((s) => ({ reps: s.reps }));
+                                const prevBest = priorSets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
+                                return isRepsPR(prevBest, set.reps) ? (
+                                  <Badge variant="default">
+                                    <Trophy size={12} className="mr-1" />
+                                    PR
+                                  </Badge>
+                                ) : null;
+                              }
+                              return null;
+                            })()}
                           </div>
-                          {/* PR Badge */}
-                          {(() => {
-                            if (!exercise || !exerciseInWorkout) return null;
-                            if (exercise.type === 'weight_reps' && set.weight != null && set.reps != null) {
-                              const priorSets = exerciseInWorkout.sets.slice(0, index);
-                              const prevBest = best1RMFromSets(priorSets);
-                              return isWeightRepsPR(prevBest, set.weight, set.reps) ? (
-                                <Badge variant="default">
-                                  <Trophy size={12} className="mr-1" />
-                                  PR
-                                </Badge>
-                              ) : null;
-                            }
-                            if (
-                              (exercise.type === 'reps_only' || exercise.type === 'bodyweight') &&
-                              set.reps != null
-                            ) {
-                              const priorSets = exerciseInWorkout.sets
-                                .slice(0, index)
-                                .map((s) => ({ reps: s.reps }));
-                              const prevBest = priorSets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
-                              return isRepsPR(prevBest, set.reps) ? (
-                                <Badge variant="default">
-                                  <Trophy size={12} className="mr-1" />
-                                  PR
-                                </Badge>
-                              ) : null;
-                            }
-                            return null;
-                          })()}
+
+                          {/* Note display (if any) — NEW */}
+                          {set.note && (
+                            <div className="mt-1 text-xs text-muted-foreground italic pl-9">
+                              {set.note}
+                            </div>
+                          )}
                         </div>
+
                         <Button variant="ghost" size="sm" onClick={() => handleDeleteSet(set.id)} aria-label="Delete set">
                           <Trash2 size={16} />
                         </Button>
@@ -547,6 +580,7 @@ export default function Training() {
               historyItems.slice(0, 20).map((w) => {
                 const ex = w.exercises.find((e) => e.exerciseId === exercise.id);
                 if (!ex) return null;
+
                 const summary = (() => {
                   if (exercise.type === 'weight_reps') {
                     return ex.sets
@@ -555,19 +589,30 @@ export default function Training() {
                   }
                   if (exercise.type === 'reps_only' || exercise.type === 'bodyweight') {
                     return ex.sets.map((s) => `${s.reps ?? 0} reps`).join(', ');
-                  }
+                }
                   if (exercise.type === 'time_only') {
                     return ex.sets.map((s) => `${formatTime(s.timeSec ?? 0)}`).join(', ');
                   }
                   return '';
                 })();
+
+                // NEW: collect notes (if any) to show gracefully under the summary
+                const notes = ex.sets
+                  .map((s) => (s.note ? s.note.trim() : ''))
+                  .filter(Boolean);
+
                 return (
                   <Card key={`${w.id}-${w.date}`}>
                     <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
                           <div className="font-medium">{w.date}</div>
                           <div className="text-sm text-muted-foreground truncate">{summary}</div>
+                          {notes.length > 0 && (
+                            <div className="text-xs text-muted-foreground mt-1 italic line-clamp-2">
+                              Notes: {notes.join(' • ')}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>
