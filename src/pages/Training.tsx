@@ -24,6 +24,15 @@ import { colorVar } from '@/utils/theme';
 
 const TIMER_PRESETS = [60, 90, 120, 180]; // 1m, 1.5m, 2m, 3m
 
+const TIME_RANGES = [
+  { key: '1W', label: '1W' },
+  { key: '1M', label: '1M' },
+  { key: '3M', label: '3M' },
+  { key: '6M', label: '6M' },
+  { key: '1Y', label: '1Y' },
+  { key: 'ALL', label: 'ALL' },
+];
+
 export default function Training() {
   const navigate = useNavigate();
   const { exerciseId } = useParams();
@@ -31,6 +40,7 @@ export default function Training() {
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [selectedRange, setSelectedRange] = useState('1M');
 
   const {
     workouts,
@@ -56,6 +66,13 @@ export default function Training() {
           if (prev <= 1) {
             setIsTimerRunning(false);
             setIsTimerOpen(false);
+            // Play bell/phone ring sound from public/sound folder
+            try {
+              const audio = new window.Audio('/sound/mixkit-achievement-bell-600.wav');
+              audio.play();
+            } catch (e) {
+              // Ignore audio errors
+            }
             return 0;
           }
           return prev - 1;
@@ -146,8 +163,47 @@ export default function Training() {
 
     if (points.length === 0) return null;
 
-    const labels = points.map((p) => p.date);
-    const data = points.map((p) => Math.round(p.value * 100) / 100);
+    // Filter points based on selectedRange
+    let filteredPoints = points;
+    if (selectedRange !== 'ALL') {
+      const now = new Date();
+      let cutoff: Date | null = null;
+      switch (selectedRange) {
+        case '1W':
+          cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '1M':
+          cutoff = new Date(now);
+          cutoff.setMonth(now.getMonth() - 1);
+          break;
+        case '3M':
+          cutoff = new Date(now);
+          cutoff.setMonth(now.getMonth() - 3);
+          break;
+        case '6M':
+          cutoff = new Date(now);
+          cutoff.setMonth(now.getMonth() - 6);
+          break;
+        case '1Y':
+          cutoff = new Date(now);
+          cutoff.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          cutoff = null;
+      }
+      if (cutoff) {
+        filteredPoints = points.filter((p) => {
+          // p.date is assumed to be 'YYYY-MM-DD'
+          const d = new Date(p.date);
+          return d >= cutoff;
+        });
+      }
+    }
+
+    if (filteredPoints.length === 0) return null;
+
+    const labels = filteredPoints.map((p) => p.date);
+    const data = filteredPoints.map((p) => Math.round(p.value * 100) / 100);
 
     return {
       labels,
@@ -161,7 +217,7 @@ export default function Training() {
         },
       ],
     };
-  }, [workouts, exercise?.id, exercise?.type]);
+  }, [workouts, exercise?.id, exercise?.type, selectedRange]);
 
   // ---------- Handlers ----------
   const handleAddSet = async () => {
@@ -218,7 +274,51 @@ export default function Training() {
       case 'weight_reps':
         return (
           <div className="flex flex-col w-full gap-3">
-            {/* Weight */}
+            {/* Reps */}
+            <div className="flex items-center justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setNewSet((prev) => ({
+                    ...prev,
+                    reps: Math.max((prev.reps || 0) - 1, 0),
+                  }))
+                }
+              >
+                <Minus size={16} />
+              </Button>
+              <Input
+                type="number"
+                value={newSet.reps ?? ''}
+                onChange={(e) =>
+                  setNewSet((prev) => ({
+                    ...prev,
+                    reps: Number.isFinite(parseInt(e.target.value))
+                      ? parseInt(e.target.value)
+                      : 0,
+                  }))
+                }
+                onKeyDown={handleKeyDown}
+                className="w-20 mx-2 text-center"
+                placeholder="0"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setNewSet((prev) => ({
+                    ...prev,
+                    reps: (prev.reps || 0) + 1,
+                  }))
+                }
+              >
+                <Plus size={16} />
+              </Button>
+              <span className="ml-2 text-sm text-muted-foreground">rp</span>
+            </div>
+
+             {/* Weight */}
             <div className="flex items-center justify-center">
               <Button
                 variant="outline"
@@ -262,50 +362,6 @@ export default function Training() {
               <span className="ml-2 text-sm text-muted-foreground">
                 {units === 'metric' ? 'kg' : 'lb'}
               </span>
-            </div>
-
-            {/* Reps */}
-            <div className="flex items-center justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setNewSet((prev) => ({
-                    ...prev,
-                    reps: Math.max((prev.reps || 0) - 1, 0),
-                  }))
-                }
-              >
-                <Minus size={16} />
-              </Button>
-              <Input
-                type="number"
-                value={newSet.reps ?? ''}
-                onChange={(e) =>
-                  setNewSet((prev) => ({
-                    ...prev,
-                    reps: Number.isFinite(parseInt(e.target.value))
-                      ? parseInt(e.target.value)
-                      : 0,
-                  }))
-                }
-                onKeyDown={handleKeyDown}
-                className="w-20 mx-2 text-center"
-                placeholder="0"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setNewSet((prev) => ({
-                    ...prev,
-                    reps: (prev.reps || 0) + 1,
-                  }))
-                }
-              >
-                <Plus size={16} />
-              </Button>
-              <span className="ml-2 text-sm text-muted-foreground">rp</span>
             </div>
 
             {/* Note (optional) — NEW */}
@@ -497,76 +553,74 @@ export default function Training() {
             {exerciseInWorkout && exerciseInWorkout.sets.length > 0 && (
               <div className="space-y-2">
                 <h3 className="font-semibold">Sets</h3>
-                {exerciseInWorkout.sets.map((set, index) => (
-                  <Card key={set.id}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3">
-                            <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
-                              {index + 1}
-                            </span>
-                            <div className="text-sm">
-                              {set.weight != null && `${set.weight} ${units === 'metric' ? 'kg' : 'lb'}`}
-                              {set.weight != null && set.reps != null && ' × '}
-                              {set.reps != null && `${set.reps} reps`}
-                              {set.timeSec != null && formatTime(set.timeSec)}
-                              {exercise?.type === 'weight_reps' &&
-                                set.weight != null &&
-                                set.reps != null && (
-                                  <span className="ml-2 text-muted-foreground">
-                                    (1RM {epley1RM(set.weight, set.reps)})
-                                  </span>
-                                )}
+                {exerciseInWorkout.sets.map((set, index) => {
+                  // Gather all sets for this exercise from all workouts
+                  const allSets = workouts
+                    .flatMap(w => w.exercises)
+                    .filter(ex => ex.exerciseId === exercise?.id)
+                    .flatMap(ex => ex.sets);
+
+                  let isPR = false;
+                  if (exercise?.type === 'weight_reps' && set.weight != null && set.reps != null) {
+                    const this1RM = epley1RM(set.weight, set.reps);
+                    const best1RM = Math.max(...allSets.map(s => s.weight != null && s.reps != null ? epley1RM(s.weight, s.reps) : 0));
+                    isPR = this1RM === best1RM && best1RM > 0;
+                  } else if ((exercise?.type === 'reps_only' || exercise?.type === 'bodyweight') && set.reps != null) {
+                    const bestReps = Math.max(...allSets.map(s => s.reps || 0));
+                    isPR = set.reps === bestReps && bestReps > 0;
+                  } else if (exercise?.type === 'time_only' && set.timeSec != null) {
+                    const bestTime = Math.max(...allSets.map(s => s.timeSec || 0));
+                    isPR = set.timeSec === bestTime && bestTime > 0;
+                  }
+
+                  return (
+                    <Card key={set.id}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
+                                {index + 1}
+                              </span>
+                              <div className="text-sm">
+                                {set.weight != null && `${set.weight} ${units === 'metric' ? 'kg' : 'lb'}`}
+                                {set.weight != null && set.reps != null && ' × '}
+                                {set.reps != null && `${set.reps} reps`}
+                                {set.timeSec != null && formatTime(set.timeSec)}
+                                {exercise?.type === 'weight_reps' &&
+                                  set.weight != null &&
+                                  set.reps != null && (
+                                    <span className="ml-2 text-muted-foreground">
+                                      (1RM {epley1RM(set.weight, set.reps)})
+                                    </span>
+                                  )}
+                              </div>
+
+                              {/* PR Badge (best ever) */}
+                              {isPR && (
+                                <Badge variant="default">
+                                  <Trophy size={12} className="mr-1" />
+                                  PR
+                                </Badge>
+                              )}
                             </div>
 
-                            {/* PR Badge */}
-                            {(() => {
-                              if (!exercise || !exerciseInWorkout) return null;
-                              if (exercise.type === 'weight_reps' && set.weight != null && set.reps != null) {
-                                const priorSets = exerciseInWorkout.sets.slice(0, index);
-                                const prevBest = best1RMFromSets(priorSets);
-                                return isWeightRepsPR(prevBest, set.weight, set.reps) ? (
-                                  <Badge variant="default">
-                                    <Trophy size={12} className="mr-1" />
-                                    PR
-                                  </Badge>
-                                ) : null;
-                              }
-                              if (
-                                (exercise.type === 'reps_only' || exercise.type === 'bodyweight') &&
-                                set.reps != null
-                              ) {
-                                const priorSets = exerciseInWorkout.sets
-                                  .slice(0, index)
-                                  .map((s) => ({ reps: s.reps }));
-                                const prevBest = priorSets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
-                                return isRepsPR(prevBest, set.reps) ? (
-                                  <Badge variant="default">
-                                    <Trophy size={12} className="mr-1" />
-                                    PR
-                                  </Badge>
-                                ) : null;
-                              }
-                              return null;
-                            })()}
+                            {/* Note display (if any) — NEW */}
+                            {set.note && (
+                              <div className="mt-1 text-xs text-muted-foreground italic pl-9">
+                                {set.note}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Note display (if any) — NEW */}
-                          {set.note && (
-                            <div className="mt-1 text-xs text-muted-foreground italic pl-9">
-                              {set.note}
-                            </div>
-                          )}
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteSet(set.id)} aria-label="Delete set">
+                            <Trash2 size={16} />
+                          </Button>
                         </div>
-
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteSet(set.id)} aria-label="Delete set">
-                          <Trash2 size={16} />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </>
@@ -623,7 +677,22 @@ export default function Training() {
           </div>
         )}
 
-        {activeTab === 'GRAPH' && (
+      {activeTab === 'GRAPH' && (
+        <>
+          {/* Time Range Buttons */}
+          <div className="flex justify-center items-center space-x-1 mb-4">
+            {TIME_RANGES.map(range => (
+              <Button
+                key={range.key}
+                variant={selectedRange === range.key ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedRange(range.key)}
+                className="text-xs"
+              >
+                {range.label}
+              </Button>
+            ))}
+          </div>
           <div className="py-4">
             {graphData ? (
               <div className="h-56">
@@ -649,7 +718,8 @@ export default function Training() {
               <div className="text-center py-8 text-muted-foreground">No data to display</div>
             )}
           </div>
-        )}
+        </>
+      )}
       </div>
 
       {/* Rest Timer Modal */}
