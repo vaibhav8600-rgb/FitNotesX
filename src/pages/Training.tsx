@@ -21,6 +21,7 @@ import { epley1RM, best1RMFromSets, isWeightRepsPR, isRepsPR } from '@/utils/pr'
 import { Line } from 'react-chartjs-2';
 import 'chart.js/auto';
 import { colorVar } from '@/utils/theme';
+import { unlockAudio, playBeep } from '@/helpers/beep';
 
 const TIMER_PRESETS = [60, 90, 120, 180]; // 1m, 1.5m, 2m, 3m
 
@@ -66,13 +67,8 @@ export default function Training() {
           if (prev <= 1) {
             setIsTimerRunning(false);
             setIsTimerOpen(false);
-            // Play bell/phone ring sound from public/sound folder
-            try {
-              const audio = new window.Audio('/sound/mixkit-achievement-bell-600.wav');
-              audio.play();
-            } catch (e) {
-              // Ignore audio errors
-            }
+            playBeep();
+            setTimeout(playBeep, 300);
             return 0;
           }
           return prev - 1;
@@ -255,6 +251,7 @@ export default function Training() {
   };
 
   const handleStartTimer = (seconds: number) => {
+    unlockAudio(); // Unlock audio on first timer start
     setTimerSeconds(seconds);
     setIsTimerRunning(true);
     setIsTimerOpen(true);
@@ -318,7 +315,7 @@ export default function Training() {
               <span className="ml-2 text-sm text-muted-foreground">rp</span>
             </div>
 
-             {/* Weight */}
+            {/* Weight */}
             <div className="flex items-center justify-center">
               <Button
                 variant="outline"
@@ -504,11 +501,10 @@ export default function Training() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab
+              className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               {tab}
             </button>
@@ -643,7 +639,7 @@ export default function Training() {
                   }
                   if (exercise.type === 'reps_only' || exercise.type === 'bodyweight') {
                     return ex.sets.map((s) => `${s.reps ?? 0} reps`).join(', ');
-                }
+                  }
                   if (exercise.type === 'time_only') {
                     return ex.sets.map((s) => `${formatTime(s.timeSec ?? 0)}`).join(', ');
                   }
@@ -677,49 +673,49 @@ export default function Training() {
           </div>
         )}
 
-      {activeTab === 'GRAPH' && (
-        <>
-          {/* Time Range Buttons */}
-          <div className="flex justify-center items-center space-x-1 mb-4">
-            {TIME_RANGES.map(range => (
-              <Button
-                key={range.key}
-                variant={selectedRange === range.key ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedRange(range.key)}
-                className="text-xs"
-              >
-                {range.label}
-              </Button>
-            ))}
-          </div>
-          <div className="py-4">
-            {graphData ? (
-              <div className="h-56">
-                <Line
-                  data={graphData}
-                  options={{
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                      x: {
-                        ticks: { color: colorVar('muted-foreground') },
-                        grid: { color: colorVar('chart-grid') },
+        {activeTab === 'GRAPH' && (
+          <>
+            {/* Time Range Buttons */}
+            <div className="flex justify-center items-center space-x-1 mb-4">
+              {TIME_RANGES.map(range => (
+                <Button
+                  key={range.key}
+                  variant={selectedRange === range.key ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedRange(range.key)}
+                  className="text-xs"
+                >
+                  {range.label}
+                </Button>
+              ))}
+            </div>
+            <div className="py-4">
+              {graphData ? (
+                <div className="h-56">
+                  <Line
+                    data={graphData}
+                    options={{
+                      responsive: true,
+                      plugins: { legend: { display: false } },
+                      scales: {
+                        x: {
+                          ticks: { color: colorVar('muted-foreground') },
+                          grid: { color: colorVar('chart-grid') },
+                        },
+                        y: {
+                          ticks: { color: colorVar('muted-foreground') },
+                          grid: { color: colorVar('chart-grid') },
+                        },
                       },
-                      y: {
-                        ticks: { color: colorVar('muted-foreground') },
-                        grid: { color: colorVar('chart-grid') },
-                      },
-                    },
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">No data to display</div>
-            )}
-          </div>
-        </>
-      )}
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">No data to display</div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Rest Timer Modal */}
@@ -730,7 +726,7 @@ export default function Training() {
             <DialogDescription>Countdown between sets</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {!isTimerRunning ? (
+            {(!isTimerRunning && timerSeconds === 0) ? (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   {TIMER_PRESETS.map((seconds) => (
@@ -743,6 +739,18 @@ export default function Training() {
                   Cancel
                 </Button>
               </>
+            ) : (!isTimerRunning && timerSeconds > 0) ? (
+              <div className="text-center space-y-4">
+                <div className="text-4xl font-bold">{formatTime(timerSeconds)}</div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => setIsTimerRunning(true)} className="flex-1">
+                    Resume
+                  </Button>
+                  <Button variant="outline" onClick={() => { setIsTimerOpen(false); setTimerSeconds(0); }} className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="text-center space-y-4">
                 <div className="text-4xl font-bold">{formatTime(timerSeconds)}</div>
