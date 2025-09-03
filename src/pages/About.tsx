@@ -45,14 +45,11 @@ export default function About() {
 
   const changelog = [
     {
-      version: '1.0.0',
-      date: '2025-08-15',
+      version: '2.0.0',
+      date: '2025-09-03',
       changes: [
-        'Initial release with core workout tracking',
-        'Exercise library with custom exercises',
-        'Progress tracking and analytics',
-        'Body measurements tracking',
-        'Import/Export functionality',
+        'Node 22 upgrade',
+        'header theme toggle animation improvements',
         'PWA support with offline capabilities'
       ]
     }
