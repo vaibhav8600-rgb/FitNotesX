@@ -76,7 +76,7 @@ export default function About() {
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <div className="flex justify-center space-x-4">
-              <Badge variant="secondary">Version 1.0.0</Badge>
+              <Badge variant="secondary">Version 2.0.0</Badge>
               <Badge variant="secondary">PWA Ready</Badge>
             </div>
             
