@@ -100,8 +100,19 @@ export default function Header({ title, onMenuClick, onAddClick, rightAction }: 
           className="text-primary-foreground hover:bg-primary-foreground/20"
           aria-label={label}
           title={label}
+          style={{
+            transition: "background-color 0.4s, color 0.4s"
+          }}
         >
-          <ThemeIcon size={20} />
+          <span
+            style={{
+              display: "inline-block",
+              transition: "transform 0.4s",
+              transform: effectiveTheme === "dark" ? "rotate(180deg)" : "rotate(0deg)"
+            }}
+          >
+            <ThemeIcon size={20} />
+          </span>
         </Button>
 
         {/* Add button */}
