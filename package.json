@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "engines": {
-    "node": "20.x"
+  "node": "24.x"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -58,6 +58,7 @@
     "date-fns": "^2.29.3",
     "dexie": "^4.0.11",
     "embla-carousel-react": "^8.6.0",
+    "framer-motion": "^12.23.12",
     "input-otp": "^1.4.2",
     "jsdom": "^25.0.1",
     "lucide-react": "^0.462.0",
@@ -70,6 +71,7 @@
     "react-hook-form": "^7.61.1",
     "react-resizable-panels": "^2.1.9",
     "react-router-dom": "^6.30.1",
+    "react-theme-switch-animation": "^0.4.0",
     "recharts": "^2.15.4",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
